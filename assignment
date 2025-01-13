@@ -5,56 +5,45 @@ from reportlab.lib.pagesizes import letter
 def extract_rects_with_width(pdf_path, output_pdf_path, page_number=0):
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_number]
-        
-        # Extract objects (rectangles, lines, etc.)
+
+        # Extract rectangles (cell boundaries)
         rects = page.objects.get("rect", [])
-        lines = page.objects.get("line", [])
         
         # Create a new PDF to draw on
         c = canvas.Canvas(output_pdf_path, pagesize=letter)
 
-        # Lists to store horizontal and vertical lines' positions
-        horizontal_lines = []
-        vertical_lines = []
+        # Store the boundaries of the table cells (left, bottom, right, top)
+        cell_boundaries = []
 
-        # Extract horizontal and vertical lines
-        for line in lines:
-            if 'x0' in line and 'y0' in line and 'x1' in line and 'y1' in line:
-                if line['y0'] == line['y1']:  # Horizontal line
-                    horizontal_lines.append(line['y0'])  # y0 = y1 for horizontal lines
-                elif line['x0'] == line['x1']:  # Vertical line
-                    vertical_lines.append(line['x0'])  # x0 = x1 for vertical lines
+        for rect in rects:
+            if 'x0' in rect and 'y0' in rect and 'x1' in rect and 'y1' in rect:
+                x0, y0, x1, y1 = rect['x0'], rect['y0'], rect['x1'], rect['y1']
+                cell_boundaries.append((x0, y0, x1, y1))
 
-        # Sort lines to detect gaps
-        horizontal_lines = sorted(set(horizontal_lines))  # Remove duplicates and sort
-        vertical_lines = sorted(set(vertical_lines))  # Remove duplicates and sort
+        # Sort the cell boundaries to separate them into horizontal and vertical lines
+        cell_boundaries.sort(key=lambda x: (x[1], x[0]))  # Sort by bottom (y0) and left (x0)
 
-        # Draw the existing lines (if any)
-        c.setStrokeColorRGB(0, 0, 0)  # Black color for original lines
-        c.setLineWidth(1)
-        for line in lines:
-            if 'x0' in line and 'y0' in line and 'x1' in line and 'y1' in line:
-                c.line(line['x0'], line['y0'], line['x1'], line['y1'])
+        # Draw the existing lines (cell boundaries)
+        for rect in rects:
+            if 'x0' in rect and 'y0' in rect and 'x1' in rect and 'y1' in rect:
+                c.setStrokeColorRGB(0, 0, 0)  # Black color for original lines
+                c.setLineWidth(1)
+                c.line(rect['x0'], rect['y0'], rect['x1'], rect['y1'])
 
-        # Draw missing horizontal lines (detect gaps between existing lines)
-        for i in range(1, len(horizontal_lines)):
-            y_gap = horizontal_lines[i] - horizontal_lines[i - 1]
-            if y_gap > 1:  # There is a gap between the horizontal lines
-                y_start = horizontal_lines[i - 1]
-                y_end = horizontal_lines[i]
+        # Detect missing horizontal lines and draw them
+        for i in range(1, len(cell_boundaries)):
+            x0, y0, x1, y1 = cell_boundaries[i]
+
+            # Check for missing horizontal line between cells (bottom of the current cell)
+            if i + 1 < len(cell_boundaries) and cell_boundaries[i+1][1] > y1:
                 c.setStrokeColorRGB(1, 0, 0)  # Red color for missing lines
                 c.setLineWidth(2)
-                c.line(0, y_start, page.width, y_start)  # Draw missing horizontal line
+                c.line(x0, y1, x1, y1)  # Draw missing horizontal line
 
-        # Draw missing vertical lines (detect gaps between existing lines)
-        for i in range(1, len(vertical_lines)):
-            x_gap = vertical_lines[i] - vertical_lines[i - 1]
-            if x_gap > 1:  # There is a gap between the vertical lines
-                x_start = vertical_lines[i - 1]
-                x_end = vertical_lines[i]
+            # Check for missing vertical line between cells (right side of the current cell)
+            if i + 1 < len(cell_boundaries) and cell_boundaries[i+1][0] > x1:
                 c.setStrokeColorRGB(0, 1, 0)  # Green color for missing lines
-                c.setLineWidth(2)
-                c.line(x_start, 0, x_start, page.height)  # Draw missing vertical line
+                c.line(x1, y0, x1, y1)  # Draw missing vertical line
 
         # Save the modified PDF with lines
         c.save()
