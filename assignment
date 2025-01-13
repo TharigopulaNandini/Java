@@ -1,44 +1,26 @@
 import pdfplumber
 
-# Function to extract data from a specific bounding box
-def extract_data_with_coordinates(pdf_path, coordinates, page_number=0):
-    """
-    Extract data from a specific bounding box using its coordinates.
-    
-    Args:
-        pdf_path (str): Path to the PDF file.
-        coordinates (tuple): (x0, y0, x1, y1) coordinates of the box.
-        page_number (int): Page number to extract the data from (0-indexed).
-
-    Returns:
-        str: Content of the text within the bounding box.
-    """
-    x0, y0, x1, y1 = coordinates
-
+def filter_rect_metadata(pdf_path, page_number=0):
     with pdfplumber.open(pdf_path) as pdf:
-        # Select the specific page
         page = pdf.pages[page_number]
-
-        # Extract text elements (characters) within the bounding box
-        text_in_bbox = [
-            char["text"]
-            for char in page.chars
-            if x0 <= char["x0"] <= x1 and y0 <= char["top"] <= y1
+        rects = page.objects.get("rect", [])
+        
+        # Keep only essential fields
+        filtered_rects = [
+            {
+                "x0": rect["x0"],
+                "y0": rect["y0"],
+                "x1": rect["x1"],
+                "y1": rect["y1"],
+                "width": rect["width"]
+            }
+            for rect in rects
         ]
-
-        # Combine extracted characters into a string
-        return "".join(text_in_bbox).strip()
+        return filtered_rects
 
 # Example usage
-if __name__ == "__main__":
-    pdf_path = "input.pdf"  # Replace with your PDF file path
-    coordinates = (404, 563, 553, 617)  # Replace with your coordinates
-    page_number = 0  # Replace with the page number (0-indexed)
+pdf_path = "example.pdf"
+filtered_rects = filter_rect_metadata(pdf_path, page_number=25)
 
-    # Extract the data from the bounding box
-    extracted_data = extract_data_with_coordinates(pdf_path, coordinates, page_number)
-
-    if extracted_data:
-        print(f"Extracted Data: {extracted_data}")
-    else:
-        print("No data found in the specified bounding box.")
+for rect in filtered_rects:
+    print(rect)
