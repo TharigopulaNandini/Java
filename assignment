@@ -1,26 +1,34 @@
 import pdfplumber
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 
-def filter_rect_metadata(pdf_path, page_number=0):
+def extract_rects_with_width(pdf_path, output_pdf_path, page_number=0):
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_number]
+        
+        # Extract rectangles (bounding boxes)
         rects = page.objects.get("rect", [])
         
-        # Keep only essential fields
-        filtered_rects = [
-            {
-                "x0": rect["x0"],
-                "y0": rect["y0"],
-                "x1": rect["x1"],
-                "y1": rect["y1"],
-                "width": rect["width"]
-            }
-            for rect in rects
-        ]
-        return filtered_rects
+        # Create a new PDF to draw on
+        c = canvas.Canvas(output_pdf_path, pagesize=letter)
+        
+        # Drawing horizontal and vertical lines based on extracted rectangles
+        for rect in rects:
+            x0, y0, x1, y1 = rect['doctop'], rect['left'], rect['bottom'], rect['right']
+            
+            # Draw horizontal lines (top and bottom)
+            c.setStrokeColorRGB(1, 0, 0)  # Red color
+            c.setLineWidth(2)
+            c.line(x0, y0, x1, y0)  # Top horizontal line
+            c.line(x0, y1, x1, y1)  # Bottom horizontal line
+            
+            # Draw vertical lines (left and right)
+            c.setStrokeColorRGB(0, 1, 0)  # Green color
+            c.line(x0, y0, x0, y1)  # Left vertical line
+            c.line(x1, y0, x1, y1)  # Right vertical line
+        
+        # Save the modified PDF with lines
+        c.save()
 
 # Example usage
-pdf_path = "example.pdf"
-filtered_rects = filter_rect_metadata(pdf_path, page_number=25)
-
-for rect in filtered_rects:
-    print(rect)
+extract_rects_with_width("your_pdf_file.pdf", "output_with_lines.pdf", 0)
