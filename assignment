@@ -1,17 +1,17 @@
 import pdfplumber
 
-# Function to extract data from a specific cell using coordinates
+# Function to extract data from a specific bounding box
 def extract_data_with_coordinates(pdf_path, coordinates, page_number=0):
     """
-    Extract data from a specific table cell using its coordinates.
+    Extract data from a specific bounding box using its coordinates.
     
     Args:
         pdf_path (str): Path to the PDF file.
-        coordinates (tuple): (x0, y0, x1, y1) coordinates of the cell.
+        coordinates (tuple): (x0, y0, x1, y1) coordinates of the box.
         page_number (int): Page number to extract the data from (0-indexed).
 
     Returns:
-        str: Content of the cell that matches the coordinates.
+        str: Content of the text within the bounding box.
     """
     x0, y0, x1, y1 = coordinates
 
@@ -19,19 +19,15 @@ def extract_data_with_coordinates(pdf_path, coordinates, page_number=0):
         # Select the specific page
         page = pdf.pages[page_number]
 
-        # Find tables on the page
-        tables = page.find_tables()
+        # Extract text elements (characters) within the bounding box
+        text_in_bbox = [
+            char["text"]
+            for char in page.chars
+            if x0 <= char["x0"] <= x1 and y0 <= char["top"] <= y1
+        ]
 
-        # Iterate through all tables and their cells
-        for table_index, table in enumerate(tables):
-            for row_index, row in enumerate(table.rows):
-                for cell_index, cell in enumerate(row.cells):
-                    if cell and cell.bbox == (x0, y0, x1, y1):
-                        print(f"Match found in Page {page_number+1}, Table {table_index}, Row {row_index}, Cell {cell_index}")
-                        return cell.text  # Return the matching cell's content
-
-    print("No matching cell found for the given coordinates.")
-    return None
+        # Combine extracted characters into a string
+        return "".join(text_in_bbox).strip()
 
 # Example usage
 if __name__ == "__main__":
@@ -39,8 +35,10 @@ if __name__ == "__main__":
     coordinates = (404, 563, 553, 617)  # Replace with your coordinates
     page_number = 0  # Replace with the page number (0-indexed)
 
-    # Extract the data from the cell with the given coordinates
-    cell_data = extract_data_with_coordinates(pdf_path, coordinates, page_number)
+    # Extract the data from the bounding box
+    extracted_data = extract_data_with_coordinates(pdf_path, coordinates, page_number)
 
-    if cell_data:
-        print(f"Extracted Cell Data: {cell_data}")
+    if extracted_data:
+        print(f"Extracted Data: {extracted_data}")
+    else:
+        print("No data found in the specified bounding box.")
