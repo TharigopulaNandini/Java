@@ -3,7 +3,7 @@ from reportlab.pdfgen import canvas
 from PyPDF2 import PdfReader, PdfWriter
 from io import BytesIO
 
-def draw_missing_lines_with_text(pdf_path, output_pdf_path, page_number=0, gap_threshold=10):
+def draw_lines_in_gaps(pdf_path, output_pdf_path, page_number=0, gap_threshold=10):
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_number]
         page_width, page_height = page.width, page.height  # Get page dimensions
@@ -13,47 +13,39 @@ def draw_missing_lines_with_text(pdf_path, output_pdf_path, page_number=0, gap_t
 
         # Sets to store unique horizontal and vertical line positions
         horizontal_lines = set()  # Unique y-coordinates
-        vertical_lines = set()    # Unique x-coordinates
 
-        # Extract horizontal and vertical lines based on rectangles
+        # Extract horizontal lines based on rectangles
         for rect in rects:
-            x0, y0, x1, y1 = rect['x0'], rect['y0'], rect['x1'], rect['y1']
+            y0, y1 = rect['y0'], rect['y1']
             horizontal_lines.add(y0)
             horizontal_lines.add(y1)
-            vertical_lines.add(x0)
-            vertical_lines.add(x1)
 
-        # Sort the lines to identify gaps
+        # Sort the horizontal lines to identify gaps
         horizontal_lines = sorted(horizontal_lines)
-        vertical_lines = sorted(vertical_lines)
 
         # Create a buffer to hold the new lines
         packet = BytesIO()
         c = canvas.Canvas(packet, pagesize=(page_width, page_height))
 
-        # Detect and draw only missing horizontal lines
-        c.setStrokeColorRGB(0, 0, 1)  # Blue color for missing horizontal lines
+        # Draw new lines only within significant gaps
+        c.setStrokeColorRGB(0, 0, 1)  # Blue color for new lines
         for i in range(1, len(horizontal_lines)):
             y_gap = horizontal_lines[i] - horizontal_lines[i - 1]
-            if y_gap > gap_threshold:  # Threshold to detect a significant gap
-                y_start = (horizontal_lines[i - 1] + horizontal_lines[i]) / 2
-                print(f"Drawing missing horizontal line at y={y_start}")
-                c.line(0, y_start, page_width, y_start)  # Draw a horizontal line across the page
+            if y_gap > gap_threshold:  # Detect significant gap
+                start_y = horizontal_lines[i - 1]
+                end_y = horizontal_lines[i]
+                num_lines = int(y_gap // gap_threshold)  # Number of lines to add
 
-        # Detect and draw only missing vertical lines
-        c.setStrokeColorRGB(0, 1, 0)  # Green color for missing vertical lines
-        for i in range(1, len(vertical_lines)):
-            x_gap = vertical_lines[i] - vertical_lines[i - 1]
-            if x_gap > gap_threshold:  # Threshold to detect a significant gap
-                x_start = (vertical_lines[i - 1] + vertical_lines[i]) / 2
-                print(f"Drawing missing vertical line at x={x_start}")
-                c.line(x_start, 0, x_start, page_height)  # Draw a vertical line across the page
+                for j in range(1, num_lines):
+                    new_y = start_y + j * (y_gap / num_lines)  # Evenly spaced lines
+                    print(f"Drawing new line at y={new_y}")
+                    c.line(0, new_y, page_width, new_y)  # Draw a horizontal line across the page
 
         # Save the overlay
         c.save()
+        packet.seek(0)
 
         # Merge the overlay with the original PDF
-        packet.seek(0)
         new_pdf = PdfReader(packet)
         original_pdf = PdfReader(pdf_path)
         writer = PdfWriter()
@@ -61,7 +53,7 @@ def draw_missing_lines_with_text(pdf_path, output_pdf_path, page_number=0, gap_t
         # Copy original pages
         for i, page in enumerate(original_pdf.pages):
             if i == page_number:
-                # Merge lines onto the selected page
+                # Merge new lines onto the selected page
                 page.merge_page(new_pdf.pages[0])
             writer.add_page(page)
 
@@ -70,4 +62,4 @@ def draw_missing_lines_with_text(pdf_path, output_pdf_path, page_number=0, gap_t
             writer.write(output_file)
 
 # Example usage
-draw_missing_lines_with_text("your_pdf_file.pdf", "output_with_text_and_lines.pdf", page_number=0, gap_threshold=10)
+draw_lines_in_gaps("your_pdf_file.pdf", "output_with_new_lines.pdf", page_number=0, gap_threshold=20)
